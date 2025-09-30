@@ -27,13 +27,48 @@ app.post('/api/get-button-link', async (req, res) => {
     });
 
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
 
-    await page.waitForSelector('button.ResultArticle_articleContainer__headerLink--problem__jb1Dv', {
-      timeout: 5000,
-    });
+    // Try multiple selectors/xpaths since GFG classnames are obfuscated and change often
+    const candidateSelectors = [
+      'button.ResultArticle_articleContainer__headerLink--problem__jb1Dv',
+      'button[class*="headerLink"][class*="problem"]',
+      'a[class*="headerLink"][class*="problem"]',
+      'a[aria-label*="Problem" i]',
+      'button[aria-label*="Problem" i]'
+    ];
+    const candidateXPaths = [
+      "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//a[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]"
+    ];
 
-    await page.click('button.ResultArticle_articleContainer__headerLink--problem__jb1Dv');
+    let clicked = false;
+    for (const sel of candidateSelectors) {
+      try {
+        await page.waitForSelector(sel, { timeout: 4000 });
+        await page.click(sel);
+        clicked = true;
+        break;
+      } catch {}
+    }
+    if (!clicked) {
+      for (const xp of candidateXPaths) {
+        try {
+          const [el] = await page.$x(xp);
+          if (el) {
+            await el.click();
+            clicked = true;
+            break;
+          }
+        } catch {}
+      }
+    }
+    if (!clicked) {
+      throw new Error('Problem link/button not found');
+    }
 
     await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
 
@@ -63,13 +98,47 @@ app.post('/api/get-details', async (req, res) => {
     });
 
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
 
-    await page.waitForSelector('button.ResultArticle_articleContainer__headerLink--problem__jb1Dv', {
-      timeout: 5000,
-    });
+    const candidateSelectors = [
+      'button.ResultArticle_articleContainer__headerLink--problem__jb1Dv',
+      'button[class*="headerLink"][class*="problem"]',
+      'a[class*="headerLink"][class*="problem"]',
+      'a[aria-label*="Problem" i]',
+      'button[aria-label*="Problem" i]'
+    ];
+    const candidateXPaths = [
+      "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//a[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]"
+    ];
 
-    await page.click('button.ResultArticle_articleContainer__headerLink--problem__jb1Dv');
+    let clicked = false;
+    for (const sel of candidateSelectors) {
+      try {
+        await page.waitForSelector(sel, { timeout: 4000 });
+        await page.click(sel);
+        clicked = true;
+        break;
+      } catch {}
+    }
+    if (!clicked) {
+      for (const xp of candidateXPaths) {
+        try {
+          const [el] = await page.$x(xp);
+          if (el) {
+            await el.click();
+            clicked = true;
+            break;
+          }
+        } catch {}
+      }
+    }
+    if (!clicked) {
+      throw new Error('Problem link/button not found');
+    }
 
     await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
 
