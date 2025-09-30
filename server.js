@@ -21,14 +21,22 @@ app.post('/api/get-button-link', async (req, res) => {
 
   try {
     const browser = await puppeteer.launch({
-      headless: true,
+      headless: 'new',
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process'
+      ],
     });
 
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(60000);
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
     // Try multiple selectors/xpaths since GFG classnames are obfuscated and change often
     const candidateSelectors = [
@@ -92,14 +100,22 @@ app.post('/api/get-details', async (req, res) => {
 
   try {
     const browser = await puppeteer.launch({
-      headless: true,
+      headless: 'new',
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process'
+      ],
     });
 
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(60000);
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
     const candidateSelectors = [
       'button.ResultArticle_articleContainer__headerLink--problem__jb1Dv',
@@ -236,16 +252,24 @@ async function getUniqueFileName(baseName, ext) {
 
 async function getPdf(url,lang) {
   const browser = await puppeteer.launch({
-    headless: "new",
+    headless: 'new',
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-zygote",
+      "--single-process"
+    ]
   });
 
   const page = await browser.newPage();
 
+  page.setDefaultNavigationTimeout(90000);
   await page.goto(url, {
     waitUntil: "networkidle2",
-    timeout: 0
+    timeout: 90000
   });
   const hasLang = await page.$(`.code-tab[data-lang="${lang}"]`);
 
