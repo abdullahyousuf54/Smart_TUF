@@ -5,6 +5,14 @@ import cors from 'cors';
 import path from "path";
 import { error } from "console";
 import fs from "fs";
+import cron from "node-cron";
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -12,85 +20,20 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-app.post('/api/get-button-link', async (req, res) => {
-  let { url } = req.body;
-
-  if (!url) {
-    return res.status(400).json({ error: 'Missing URL' });
-  }
-
+function extractProblemTitle(url) {
   try {
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-zygote',
-        '--single-process'
-      ],
-    });
-
-    const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(60000);
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-
-    // Try multiple selectors/xpaths since GFG classnames are obfuscated and change often
-    const candidateSelectors = [
-      'button.ResultArticle_articleContainer__headerLink--problem__jb1Dv',
-      'button[class*="headerLink"][class*="problem"]',
-      'a[class*="headerLink"][class*="problem"]',
-      'a[aria-label*="Problem" i]',
-      'button[aria-label*="Problem" i]'
-    ];
-    const candidateXPaths = [
-      "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
-      "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
-      "//a[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
-      "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]"
-    ];
-
-    let clicked = false;
-    for (const sel of candidateSelectors) {
-      try {
-        await page.waitForSelector(sel, { timeout: 4000 });
-        await page.click(sel);
-        clicked = true;
-        break;
-      } catch {}
-    }
-    if (!clicked) {
-      for (const xp of candidateXPaths) {
-        try {
-          const [el] = await page.$x(xp);
-          if (el) {
-            await el.click();
-            clicked = true;
-            break;
-          }
-        } catch {}
-      }
-    }
-    if (!clicked) {
-      throw new Error('Problem link/button not found');
-    }
-
-    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
-
-    const newUrl = page.url();
-
-    await browser.close();
-
-    res.json({ link: newUrl });
-  } catch (error) {
-    console.error('Scraping error:', error.message);
-    res.status(500).json({ error: 'Failed to get link from button click' });
+    // Extract search query from URL like: 
+    // https://www.geeksforgeeks.org/search/?gq=Two%20Sum
+    const urlObj = new URL(url);
+    const searchParams = urlObj.searchParams;
+    const query = searchParams.get('gq');
+    return query ? decodeURIComponent(query) : null;
+  } catch {
+    return null;
   }
-});
+}
 
+// ✅ Modified /api/get-details endpoint with Redis cache
 app.post('/api/get-details', async (req, res) => {
   let { url } = req.body;
 
@@ -99,23 +42,49 @@ app.post('/api/get-details', async (req, res) => {
   }
 
   try {
+    // 🔍 Step 1: Try to get data from Redis cache
+    const problemTitle = extractProblemTitle(url);
+    
+    if (problemTitle) {
+      console.log(`Checking cache for: ${problemTitle}`);
+      
+      const cachedData = await redis.hgetall(problemTitle);
+      
+      // If cache hit, return immediately
+      if (cachedData && Object.keys(cachedData).length > 0) {
+        console.log(`✓ Cache HIT for: ${problemTitle}`);
+        
+        return res.json({
+          time: cachedData.time || null,
+          space: cachedData.space || null,
+          companyNames: cachedData.companyNames ? JSON.parse(cachedData.companyNames) : [],
+          topics: cachedData.topics ? JSON.parse(cachedData.topics) : [],
+          source: 'cache' // Indicate data came from cache
+        });
+      }
+      
+      console.log(`✗ Cache MISS for: ${problemTitle}`);
+    }
+
+    // 🌐 Step 2: If cache miss, scrape with Puppeteer
+    console.log('Fetching from Puppeteer...');
+    
     const browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true, // ✅ Fixed: was 'new', should be boolean
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--no-zygote',
-        '--single-process'
+        '--disable-blink-features=AutomationControlled',
       ],
     });
 
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const candidateSelectors = [
       'button.ResultArticle_articleContainer__headerLink--problem__jb1Dv',
@@ -124,6 +93,7 @@ app.post('/api/get-details', async (req, res) => {
       'a[aria-label*="Problem" i]',
       'button[aria-label*="Problem" i]'
     ];
+    
     const candidateXPaths = [
       "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
       "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
@@ -140,6 +110,7 @@ app.post('/api/get-details', async (req, res) => {
         break;
       } catch {}
     }
+    
     if (!clicked) {
       for (const xp of candidateXPaths) {
         try {
@@ -152,25 +123,21 @@ app.post('/api/get-details', async (req, res) => {
         } catch {}
       }
     }
+    
     if (!clicked) {
+      await browser.close();
       throw new Error('Problem link/button not found');
     }
 
     await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
-
-    // Ensure complexities section is present before extraction
     await page.waitForSelector('[class^="problems_expected_complexities_text"]', { timeout: 5000 }).catch(() => {});
 
-    // ✅ Run DOM extraction in page context with fallbacks
     const result = await page.evaluate(() => {
       function getTextSafe(el) {
         return (el && el.textContent && el.textContent.trim()) || null;
       }
 
-      // Primary container
       let complexityContainer = document.querySelector('[class^="problems_expected_complexities_text"]');
-
-      // Fallbacks (in case GFG changes classnames slightly)
       if (!complexityContainer) {
         complexityContainer = document.querySelector('.problems_expected_complexities_text');
       }
@@ -185,10 +152,10 @@ app.post('/api/get-details', async (req, res) => {
         space = getTextSafe(second);
       }
 
-      // Companies and topics
       const checkDiv = document.querySelector('div[class*="problems_active_tags"]');
       let companyNames, topics;
-      if(checkDiv){
+      
+      if (checkDiv) {
         const labelBlocks = Array.from(document.querySelectorAll('.ui.labels'));
         const companyBlock = labelBlocks[0] || null;
         const topicBlock = labelBlocks[1] || null;
@@ -200,7 +167,7 @@ app.post('/api/get-details', async (req, res) => {
         topics = topicBlock
           ? Array.from(topicBlock.querySelectorAll('a')).map(a => a.textContent.trim())
           : [];
-      }else{
+      } else {
         companyNames = null;
         const labelBlocks = Array.from(document.querySelectorAll('.ui.labels'));
         const topicBlock = labelBlocks[0] || null;
@@ -208,15 +175,112 @@ app.post('/api/get-details', async (req, res) => {
           ? Array.from(topicBlock.querySelectorAll('a')).map(a => a.textContent.trim())
           : [];
       }
-      
 
       return { time, space, companyNames, topics };
     });
 
     await browser.close();
 
-    res.json(result);
+    // 💾 Step 3: Cache the result in Redis for future requests
+    if (problemTitle && result) {
+      console.log(`Caching data for: ${problemTitle}`);
+      
+      await redis.hset(problemTitle, {
+        time: result.time || 'N/A',
+        space: result.space || 'N/A',
+        companyNames: JSON.stringify(result.companyNames || []),
+        topics: JSON.stringify(result.topics || []),
+      });
+    }
 
+    // Return the scraped data
+    res.json({
+      ...result,
+      source: 'puppeteer' // Indicate data came from live scraping
+    });
+
+  } catch (error) {
+    console.error('Scraping error:', error.message);
+    res.status(500).json({ error: 'Failed to get details' });
+  }
+});
+
+// ✅ /api/get-button-link endpoint (no caching needed here)
+app.post('/api/get-button-link', async (req, res) => {
+  let { url } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: 'Missing URL' });
+  }
+
+  try {
+    const browser = await puppeteer.launch({
+      headless: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-blink-features=AutomationControlled',
+      ],
+    });
+
+    const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(60000);
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    const candidateSelectors = [
+      'button.ResultArticle_articleContainer__headerLink--problem__jb1Dv',
+      'button[class*="headerLink"][class*="problem"]',
+      'a[class*="headerLink"][class*="problem"]',
+      'a[aria-label*="Problem" i]',
+      'button[aria-label*="Problem" i]'
+    ];
+    
+    const candidateXPaths = [
+      "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//a[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
+      "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]"
+    ];
+
+    let clicked = false;
+    for (const sel of candidateSelectors) {
+      try {
+        await page.waitForSelector(sel, { timeout: 4000 });
+        await page.click(sel);
+        clicked = true;
+        break;
+      } catch {}
+    }
+    
+    if (!clicked) {
+      for (const xp of candidateXPaths) {
+        try {
+          const [el] = await page.$x(xp);
+          if (el) {
+            await el.click();
+            clicked = true;
+            break;
+          }
+        } catch {}
+      }
+    }
+    
+    if (!clicked) {
+      await browser.close();
+      throw new Error('Problem link/button not found');
+    }
+
+    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
+
+    const newUrl = page.url();
+    await browser.close();
+
+    res.json({ link: newUrl });
+    
   } catch (error) {
     console.error('Scraping error:', error.message);
     res.status(500).json({ error: 'Failed to get link from button click' });
