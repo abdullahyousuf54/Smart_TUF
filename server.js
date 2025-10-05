@@ -20,14 +20,16 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-function extractProblemTitle(url) {
+async function extractProblemTitle(title) {
   try {
     // Extract search query from URL like: 
     // https://www.geeksforgeeks.org/search/?gq=Two%20Sum
-    const urlObj = new URL(url);
-    const searchParams = urlObj.searchParams;
-    const query = searchParams.get('gq');
-    return query ? decodeURIComponent(query) : null;
+    // const urlObj = new URL(url);
+    // const searchParams = urlObj.searchParams;
+    // const query = searchParams.get('gq');
+    // return query ? decodeURIComponent(query) : null;
+    const check = await redis.hgetall(title);
+    return check ? title : null;
   } catch {
     return null;
   }
@@ -35,7 +37,7 @@ function extractProblemTitle(url) {
 
 // ✅ Modified /api/get-details endpoint with Redis cache
 app.post('/api/get-details', async (req, res) => {
-  let { url } = req.body;
+  let { url,title } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'Missing URL' });
@@ -43,7 +45,7 @@ app.post('/api/get-details', async (req, res) => {
 
   try {
     // 🔍 Step 1: Try to get data from Redis cache
-    const problemTitle = extractProblemTitle(url);
+    const problemTitle = extractProblemTitle(title);
     
     if (problemTitle) {
       console.log(`Checking cache for: ${problemTitle}`);
@@ -59,7 +61,6 @@ app.post('/api/get-details', async (req, res) => {
           space: cachedData.space || null,
           companyNames: cachedData.companyNames ? JSON.parse(cachedData.companyNames) : [],
           topics: cachedData.topics ? JSON.parse(cachedData.topics) : [],
-          source: 'cache' // Indicate data came from cache
         });
       }
       
