@@ -49,6 +49,8 @@ app.post('/api/get-details', async (req, res) => {
   try {
     // 🔍 Step 1: Try to get data from Redis cache
     const problemTitle = await extractProblemTitle(title);
+    console.log(title);
+    console.log(problemTitle);
     
     if (problemTitle) {
       console.log(`Checking cache for: ${problemTitle}`);
