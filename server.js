@@ -38,6 +38,15 @@ async function extractProblemTitle(title) {
   }
 }
 
+function safeParse(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return [value]; // fallback if it's a single string
+  }
+}
 // ✅ Modified /api/get-details endpoint with Redis cache
 app.post('/api/get-details', async (req, res) => {
   let { url,title } = req.body;
@@ -64,8 +73,8 @@ app.post('/api/get-details', async (req, res) => {
         return res.json({
           time: cachedData.time || null,
           space: cachedData.space || null,
-          companyNames: cachedData.companyNames ? JSON.parse(cachedData.companyNames) : [],
-          topics: cachedData.topics ? JSON.parse(cachedData.topics) : [],
+          companyNames: safeParse(cachedData.companyNames),
+          topics: safeParse(cachedData.topics),
         });
       }
       
