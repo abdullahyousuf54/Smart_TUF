@@ -7,6 +7,9 @@ import { error } from "console";
 import fs from "fs";
 import cron from "node-cron";
 import { Redis } from "@upstash/redis";
+import dotenv from "dotenv";
+dotenv.config();
+
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
