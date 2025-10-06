@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-async function extractProblemTitle(title) {
+async function checkInRedis(title) {
   try {
     // Extract search query from URL like: 
     // https://www.geeksforgeeks.org/search/?gq=Two%20Sum
@@ -57,7 +57,7 @@ app.post('/api/get-details', async (req, res) => {
 
   try {
     // 🔍 Step 1: Try to get data from Redis cache
-    const problemTitle = await extractProblemTitle(title);
+    const problemTitle = await checkInRedis(title);
     console.log(title);
     console.log(problemTitle);
     
@@ -222,11 +222,32 @@ app.post('/api/get-details', async (req, res) => {
 
 // ✅ /api/get-button-link endpoint (no caching needed here)
 app.post('/api/get-button-link', async (req, res) => {
-  let { url } = req.body;
+  let { url,title } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'Missing URL' });
   }
+
+    const problemTitle = await checkInRedis(title);
+    console.log(title);
+    console.log(problemTitle);
+    
+    if (problemTitle) {
+      console.log(`Checking cache for: ${problemTitle}`);
+      
+      const cachedData = await redis.hgetall(problemTitle);
+      
+      // If cache hit, return immediately
+      if (cachedData && Object.keys(cachedData).length > 0) {
+        console.log(`✓ Cache HIT for: ${problemTitle}`);
+        
+        return res.json({
+          link: cachedData.url || null,
+        });
+      }
+      
+      console.log(`✗ Cache MISS for: ${problemTitle}`);
+    }
 
   try {
     const browser = await puppeteer.launch({
