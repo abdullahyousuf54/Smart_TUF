@@ -1,4 +1,3 @@
-// server/server.js
 import express from 'express';
 import puppeteer from 'puppeteer';
 import cors from 'cors';
@@ -10,12 +9,10 @@ import { Redis } from "@upstash/redis";
 import dotenv from "dotenv";
 dotenv.config();
 
-
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
-
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,12 +22,7 @@ app.use(express.json());
 
 async function checkInRedis(title) {
   try {
-    // Extract search query from URL like: 
-    // https://www.geeksforgeeks.org/search/?gq=Two%20Sum
-    // const urlObj = new URL(url);
-    // const searchParams = urlObj.searchParams;
-    // const query = searchParams.get('gq');
-    // return query ? decodeURIComponent(query) : null;
+
     const check = await redis.hgetall(title);
     return check ? title : null;
   } catch {
@@ -44,10 +36,10 @@ function safeParse(value) {
   try {
     return JSON.parse(value);
   } catch {
-    return [value]; // fallback if it's a single string
+    return [value]; 
   }
 }
-// ✅ Modified /api/get-details endpoint with Redis cache
+
 app.post('/api/get-details', async (req, res) => {
   let { url,title } = req.body;
 
@@ -56,20 +48,19 @@ app.post('/api/get-details', async (req, res) => {
   }
 
   try {
-    // 🔍 Step 1: Try to get data from Redis cache
+
     const problemTitle = await checkInRedis(title);
     console.log(title);
     console.log(problemTitle);
-    
+
     if (problemTitle) {
       console.log(`Checking cache for: ${problemTitle}`);
-      
+
       const cachedData = await redis.hgetall(problemTitle);
-      
-      // If cache hit, return immediately
+
       if (cachedData && Object.keys(cachedData).length > 0) {
         console.log(`✓ Cache HIT for: ${problemTitle}`);
-        
+
         return res.json({
           time: cachedData.time || null,
           space: cachedData.space || null,
@@ -77,15 +68,14 @@ app.post('/api/get-details', async (req, res) => {
           topics: safeParse(cachedData.topics),
         });
       }
-      
+
       console.log(`✗ Cache MISS for: ${problemTitle}`);
     }
 
-    // 🌐 Step 2: If cache miss, scrape with Puppeteer
     console.log('Fetching from Puppeteer...');
-    
+
     const browser = await puppeteer.launch({
-      headless: true, // ✅ Fixed: was 'new', should be boolean
+      headless: true, 
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: [
         '--no-sandbox',
@@ -108,7 +98,7 @@ app.post('/api/get-details', async (req, res) => {
       'a[aria-label*="Problem" i]',
       'button[aria-label*="Problem" i]'
     ];
-    
+
     const candidateXPaths = [
       "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
       "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
@@ -125,7 +115,7 @@ app.post('/api/get-details', async (req, res) => {
         break;
       } catch {}
     }
-    
+
     if (!clicked) {
       for (const xp of candidateXPaths) {
         try {
@@ -138,7 +128,7 @@ app.post('/api/get-details', async (req, res) => {
         } catch {}
       }
     }
-    
+
     if (!clicked) {
       await browser.close();
       throw new Error('Problem link/button not found');
@@ -169,7 +159,7 @@ app.post('/api/get-details', async (req, res) => {
 
       const checkDiv = document.querySelector('div[class*="problems_active_tags"]');
       let companyNames, topics;
-      
+
       if (checkDiv) {
         const labelBlocks = Array.from(document.querySelectorAll('.ui.labels'));
         const companyBlock = labelBlocks[0] || null;
@@ -196,10 +186,9 @@ app.post('/api/get-details', async (req, res) => {
 
     await browser.close();
 
-    // 💾 Step 3: Cache the result in Redis for future requests
     if (problemTitle && result) {
       console.log(`Caching data for: ${problemTitle}`);
-      
+
       await redis.hset(problemTitle, {
         time: result.time || 'N/A',
         space: result.space || 'N/A',
@@ -208,10 +197,9 @@ app.post('/api/get-details', async (req, res) => {
       });
     }
 
-    // Return the scraped data
     res.json({
       ...result,
-      source: 'puppeteer' // Indicate data came from live scraping
+      source: 'puppeteer' 
     });
 
   } catch (error) {
@@ -220,7 +208,6 @@ app.post('/api/get-details', async (req, res) => {
   }
 });
 
-// ✅ /api/get-button-link endpoint (no caching needed here)
 app.post('/api/get-button-link', async (req, res) => {
   let { url,title } = req.body;
 
@@ -231,21 +218,20 @@ app.post('/api/get-button-link', async (req, res) => {
     const problemTitle = await checkInRedis(title);
     console.log(title);
     console.log(problemTitle);
-    
+
     if (problemTitle) {
       console.log(`Checking cache for: ${problemTitle}`);
-      
+
       const cachedData = await redis.hgetall(problemTitle);
-      
-      // If cache hit, return immediately
+
       if (cachedData && Object.keys(cachedData).length > 0) {
         console.log(`✓ Cache HIT for: ${problemTitle}`);
-        
+
         return res.json({
           link: cachedData.url || null,
         });
       }
-      
+
       console.log(`✗ Cache MISS for: ${problemTitle}`);
     }
 
@@ -274,7 +260,7 @@ app.post('/api/get-button-link', async (req, res) => {
       'a[aria-label*="Problem" i]',
       'button[aria-label*="Problem" i]'
     ];
-    
+
     const candidateXPaths = [
       "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
       "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'problem')]",
@@ -291,7 +277,7 @@ app.post('/api/get-button-link', async (req, res) => {
         break;
       } catch {}
     }
-    
+
     if (!clicked) {
       for (const xp of candidateXPaths) {
         try {
@@ -304,7 +290,7 @@ app.post('/api/get-button-link', async (req, res) => {
         } catch {}
       }
     }
-    
+
     if (!clicked) {
       await browser.close();
       throw new Error('Problem link/button not found');
@@ -316,13 +302,12 @@ app.post('/api/get-button-link', async (req, res) => {
     await browser.close();
 
     res.json({ link: newUrl });
-    
+
   } catch (error) {
     console.error('Scraping error:', error.message);
     res.status(500).json({ error: 'Failed to get link from button click' });
   }
 });
-
 
 app.post('/api/download-pdf', async(req,res) => {
   console.log('Incoming body:', req.body);
@@ -331,10 +316,9 @@ app.post('/api/download-pdf', async(req,res) => {
 
   try{
     function sanitizeFileName(name) {
-  // replace invalid characters with "_"
+
   return name.replace(/[<>:"/\\|?*]+/g, "_");
 }
-
 
 async function getUniqueFileName(baseName, ext) {
   baseName = sanitizeFileName(baseName);
@@ -348,7 +332,6 @@ async function getUniqueFileName(baseName, ext) {
 
   return fileName;
 }
-
 
 async function getPdf(url,lang) {
   const browser = await puppeteer.launch({
@@ -378,29 +361,13 @@ async function getPdf(url,lang) {
     throw Error(`This note is not available in ${lang} language!`);
   }
 
-  // If available, click it
   await page.evaluate((lang) => {
     const btn = document.querySelector(`.code-tab[data-lang="${lang}"]`);
     if (btn) btn.click();
   }, lang);
 
-  
   await page.evaluate((lang) => {
-    // console.log(lang);
-  //  try {
-  //   if (lang === "java" || lang === "cpp" || lang === "python" || lang === "javascript") {
-  //     const btn = document.querySelector(`.code-tab[data-lang="${lang}"]`);
-  //     if (btn) {
-  //       btn.click();
-  //     } else {
-  //       console.error("No tab button found for", lang);
-  //     }
-  //   }
-  // } catch (err) {
-  //   console.error("Error while switching tab:", err.message);
-  // }
-    
-// Expand details
+
   document.querySelectorAll("details").forEach(d => d.setAttribute("open", "true"));
   const firstDiv = document.querySelector(".h-screen");
   if (firstDiv) {
@@ -413,20 +380,16 @@ async function getPdf(url,lang) {
   btn.click();
 
   const th = document.getElementsByClassName('sticky top-10');
-  th[0].remove();  //ad removed
+  th[0].remove();  
   const el = document.getElementsByClassName("w-full flex-col"); 
-  el[5].classList.remove("md:w-[80%]");   //full screen
+  el[5].classList.remove("md:w-[80%]");   
   const el2 = document.querySelector('.mt-\\[56px\\].lg\\:mt-0');
-  el2.remove();     //header removed
+  el2.remove();     
   const el3 = document.querySelector('.bg-white.dark\\:bg-\\[\\#161A20\\]');
-  el3.remove();   //header removed
-  
+  el3.remove();   
+
 }, lang);
 
-// await page.waitForSelector(`.code-block[data-lang="${lang}"].dsa_article_code_active`, { timeout: 5000 });
-
-
-//yt logo
 let el =await page.$('.dsa_article_youtube_video');
 if(el){
   await page.waitForSelector('.dsa_article_youtube_video', { timeout: 5000 });
@@ -442,8 +405,6 @@ if(el){
   }
 }
 
-
-//acknowledgment block
 const el2 = await page.$('.wp-block-quote');
 if (el2){
   await page.waitForSelector('.wp-block-quote', { timeout: 5000 });
@@ -452,8 +413,6 @@ await page.evaluate(() => {
 });
 }
 
-
-//track content block 
 const btn = await page.$('button.fixed.lg\\:hidden');
 if (btn) {
   await page.waitForSelector('button.fixed.lg\\:hidden', { timeout: 5000 });
@@ -464,7 +423,6 @@ if (btn) {
   });
 }
 
-
 await page.addStyleTag({
   content: `
     * {
@@ -473,10 +431,10 @@ await page.addStyleTag({
       color-adjust: exact !important;
       color: #000000 !important;
     }
-    
+
     body, p, span, div, strong, em, h1, h2, h3, h4, h5, h6, a {
       color: #000000 !important;
-      -webkit-text-fill-color: #000000 !important; /* force fill color */
+      -webkit-text-fill-color: #000000 !important; 
       -webkit-text-stroke: 0px #000000 !important;
     }
   `
@@ -487,12 +445,10 @@ await page.addStyleTag({
     * {
       -webkit-font-smoothing: none !important;
       -moz-osx-font-smoothing: auto !important;
-      text-shadow: 0 0 0 currentColor !important; /* tiny trick to boost weight */
+      text-shadow: 0 0 0 currentColor !important; 
     }
   `
 });
-
-
 
   await page.evaluate(() => {
   const scroller = document.querySelector(".scroll-container");
@@ -521,28 +477,15 @@ await page.addStyleTag({
     body, html {
       margin: 0 !important;
       padding: 0 !important;
-      background: #ffffffff !important; /* remove grey */
+      background: #ffffffff !important; 
     }
-    
+
   `
 });
 
 let title = await page.title();
-// const filePath = await getUniqueFileName(title, "pdf");
+
 title = sanitizeFileName(await page.title());
-
-
-  // await page.pdf({
-  //   path: filePath,
-  //   format: "A4",
-  //   printBackground: true,
-  //   margin: {
-  //   top: "10px",
-  //   right: "10px",
-  //   bottom: "10px",
-  //   left: "10px"
-  // }
-  // });
 
 const pdfBuffer = await page.pdf({
   format: "A4",
@@ -554,37 +497,23 @@ const pdfBuffer = await page.pdf({
 };
 
 const { pdfBuffer, title } = await getPdf(url, lang);
-//   res.set({
-//   "Content-Type": "application/pdf",
-//   "Content-Disposition": `attachment; filename="${title}.pdf"`,
-//   "Content-Length": pdfBuffer.length,
-// });
-// console.log("Downloaded");
-// res.send(pdfBuffer);
+
 res.setHeader("Content-Type", "application/pdf");
 res.setHeader("Content-Disposition", `attachment; filename="${title}.pdf"`);
 res.setHeader("Content-Length", pdfBuffer.length);
-// Expose header so browser JS can read Content-Disposition
+
 res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
 console.log("Downloaded PDF size:", pdfBuffer.length);
 res.end(pdfBuffer);
 
-
-
   }catch(err){
     console.error(err);
-    // Check if it's a language availability error
-    // if (err.message.includes('Language') && err.message.includes('not available')) {
-    //   res.status(400).json({ success: false, error: err.message });
-    // } else {
-    //   res.status(500).json({ success: false, error: err.message });
-    // }
+
     res.status(400).json({ success: false, error: err.message });
   }
 
 });
 
-
 app.listen(PORT, () => {
-  console.log(`Puppeteer server running at http://localhost:${PORT}`);
+  console.log(`Puppeteer server running at http:
 });
