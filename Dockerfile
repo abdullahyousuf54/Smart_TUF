@@ -1,6 +1,5 @@
 FROM node:18
 
-# Install system dependencies required by Chromium and Puppeteer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     libasound2 \
@@ -25,16 +24,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install only server dependencies
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copy server source
 COPY server.js ./
 
 EXPOSE 3001
 
-# Environment for Puppeteer
 ENV NODE_ENV=production \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
