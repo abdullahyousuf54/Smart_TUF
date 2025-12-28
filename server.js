@@ -429,7 +429,7 @@ const el2 = await page.$('.wp-block-quote');
 if (el2){
   await page.waitForSelector('.wp-block-quote', { timeout: 5000 });
 await page.evaluate(() => {
-  document.querySelectorAll('.wp-block-quote').forEach(el => el.?remove());
+  document.querySelectorAll('.wp-block-quote').forEach(el => el?.remove());
 });
 }
 
