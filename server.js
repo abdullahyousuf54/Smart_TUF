@@ -521,5 +521,6 @@ res.end(pdfBuffer);
 });
 
 app.listen(PORT, () => {
-  console.log(`Puppeteer server running at http:
+  console.log(`Puppeteer server running at http://localhost:${PORT}`);
 });
+
