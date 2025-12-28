@@ -376,8 +376,14 @@ async function getPdf(url,lang) {
     firstDiv.style.overflowY = "visible";
     firstDiv.style.height = "auto";
   }    
+  // const btn = document.querySelector(".theme-toggle");
+  // btn.click();
   const btn = document.querySelector(".theme-toggle");
-  btn.click();
+  if (btn) {
+     btn.click();
+  } else {
+    console.log("Theme toggle button not found — skipping click");
+  }
 
   const th = document.getElementsByClassName('sticky top-10');
   th[0].remove();  
