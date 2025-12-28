@@ -386,14 +386,27 @@ async function getPdf(url,lang) {
   }
 
   const th = document.getElementsByClassName('sticky top-10');
-  if(th) th[0].remove(); 
+  if (th && th.length > 0 && th[0]) {
+    th[0].remove();
+  }
    
   const el = document.getElementsByClassName("w-full flex-col"); 
-  if(el) el[5].classList.remove("md:w-[80%]");   
+  if (el && el.length > 5 && el[5]) {
+    el[5].classList?.remove("md:w-[80%]");
+  }
+    
   const el2 = document.querySelector('.mt-\\[56px\\].lg\\:mt-0');
-  if(el2) el2.remove();     
+  if(el2){ 
+    el2.remove();
+  }else{
+    console.log("Checked and not found");
+  }
   const el3 = document.querySelector('.bg-white.dark\\:bg-\\[\\#161A20\\]');
-  if(el3) el3.remove();   
+  if(el3){ 
+    el3.remove();
+  }else{
+    console.log("Checked and not found");
+  }
 
 }, lang);
 
@@ -401,7 +414,7 @@ let el =await page.$('.dsa_article_youtube_video');
 if(el){
   await page.waitForSelector('.dsa_article_youtube_video', { timeout: 5000 });
   await page.evaluate(() => {
-    document.querySelectorAll('.dsa_article_youtube_video').forEach(el => el.remove());
+    document.querySelectorAll('.dsa_article_youtube_video').forEach(el => el?.remove());
   });
 }else{
   el = await page.$('ytp-cued-thumbnail-overlay-image');
@@ -416,7 +429,7 @@ const el2 = await page.$('.wp-block-quote');
 if (el2){
   await page.waitForSelector('.wp-block-quote', { timeout: 5000 });
 await page.evaluate(() => {
-  document.querySelectorAll('.wp-block-quote').forEach(el => el.remove());
+  document.querySelectorAll('.wp-block-quote').forEach(el => el.?remove());
 });
 }
 
@@ -466,15 +479,16 @@ await page.addStyleTag({
 });
 
 await page.evaluate(() => {
-  const ell = document.querySelectorAll('.code-block dsa_article_code_active, .code-content');
-  if(ell){
-      document.querySelectorAll('.code-block dsa_article_code_active, .code-content').forEach(el => {
+  const ell = document.querySelectorAll('.code-block .dsa_article_code_active, .code-content');
+  if (ell && ell.length > 0) {
+    ell.forEach(el => {
       el.style.maxHeight = 'none';
       el.style.height = 'auto';
       el.style.overflow = 'visible';
     });
   }
 });
+
 
 await page.addStyleTag({
   content: `
