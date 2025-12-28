@@ -386,13 +386,14 @@ async function getPdf(url,lang) {
   }
 
   const th = document.getElementsByClassName('sticky top-10');
-  th[0].remove();  
+  if(th) th[0].remove(); 
+   
   const el = document.getElementsByClassName("w-full flex-col"); 
-  el[5].classList.remove("md:w-[80%]");   
+  if(el) el[5].classList.remove("md:w-[80%]");   
   const el2 = document.querySelector('.mt-\\[56px\\].lg\\:mt-0');
-  el2.remove();     
+  if(el2) el2.remove();     
   const el3 = document.querySelector('.bg-white.dark\\:bg-\\[\\#161A20\\]');
-  el3.remove();   
+  if(el3) el3.remove();   
 
 }, lang);
 
