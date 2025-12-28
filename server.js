@@ -478,6 +478,21 @@ await page.addStyleTag({
   }
 });
 
+  
+await page.evaluate(() => {
+
+  // remove dark mode
+  document.documentElement.classList.remove("dark");
+
+  // remove overflow-hidden everywhere
+  document.querySelectorAll(".overflow-hidden").forEach(el => {
+    el.classList.remove("overflow-hidden");
+  });
+
+});
+
+
+  
 await page.evaluate(() => {
   const ell = document.querySelectorAll('.code-block .dsa_article_code_active, .code-content');
   if (ell && ell.length > 0) {
